@@ -32,6 +32,11 @@ export default function Home() {
     setActivePanel("clinical-review");
   }
 
+  function handleSendFhirToWorkbench(resource: Parameters<typeof vm.addFhirResourceToWorkbench>[0]) {
+    vm.addFhirResourceToWorkbench(resource);
+    setActivePanel("workbench");
+  }
+
   function handleClearAll() {
     const confirmed = window.confirm(
       "Clear all app data? This will reset context, analyses, retrieval state, and FHIR results."
@@ -216,7 +221,10 @@ export default function Home() {
                   fhirError={vm.fhirError}
                   fhirResults={vm.fhirResults}
                   fhirCount={vm.fhirCount}
+                  fhirLastRequestUrl={vm.fhirLastRequestUrl}
                   onSearch={vm.searchFhir}
+                  onClearResults={vm.clearFhirResults}
+                  onSendResourceToWorkbench={handleSendFhirToWorkbench}
                 />
               </motion.div>
             )}
