@@ -10,6 +10,7 @@ import {
   HistoryItem,
   RecruiterKit,
 } from "@/features/clinical/types";
+import { getClientApiHeaders, readApiErrorMessage } from "@/lib/client/api";
 
 function createContextSignature(context: string, fileName: string | null) {
   let hash = 0;
@@ -324,7 +325,7 @@ export function useClinicalWorkbench() {
     try {
       const res = await fetch("/api/retrieval/index", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getClientApiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           context,
           fileName,
@@ -332,10 +333,11 @@ export function useClinicalWorkbench() {
         }),
       });
 
-      const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error ?? "Vector indexing failed");
+        throw new Error(await readApiErrorMessage(res, "Vector indexing failed"));
       }
+
+      const data = (await res.json()) as { docId?: string };
 
       const nextDocId = data.docId ?? null;
       setIndexedDocId(nextDocId);
@@ -382,7 +384,7 @@ export function useClinicalWorkbench() {
 
     const res = await fetch("/api/retrieval/query", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getClientApiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         query: prompt,
         docId,
@@ -390,10 +392,11 @@ export function useClinicalWorkbench() {
       }),
     });
 
-    const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.error ?? "Evidence retrieval failed");
+      throw new Error(await readApiErrorMessage(res, "Evidence retrieval failed"));
     }
+
+    const data = (await res.json()) as { evidence?: EvidenceItem[] };
 
     const nextEvidence = Array.isArray(data.evidence)
       ? (data.evidence as EvidenceItem[])
@@ -443,15 +446,15 @@ export function useClinicalWorkbench() {
 
       const res = await fetch("/api/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getClientApiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ prompt: promptSnapshot, context: retrievalContext }),
         signal: controller.signal,
       });
       const resClone = res.clone();
 
       if (!res.ok) {
-        const text = await res.text();
-        setApiError(text || `Request failed (${res.status})`);
+        const message = await readApiErrorMessage(res, `Request failed (${res.status})`);
+        setApiError(message);
         setIsLoading(false);
         return;
       }
@@ -556,14 +559,18 @@ export function useClinicalWorkbench() {
         try {
           const literatureResponse = await fetch("/api/clinical-review/sources", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: getClientApiHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({ prompt: promptSnapshot, context }),
             signal: controller.signal,
           });
 
           if (!literatureResponse.ok) {
-            const text = await literatureResponse.text();
-            throw new Error(text || `Literature search failed (${literatureResponse.status})`);
+            throw new Error(
+              await readApiErrorMessage(
+                literatureResponse,
+                `Literature search failed (${literatureResponse.status})`
+              )
+            );
           }
 
           literatureResult = (await literatureResponse.json()) as {
@@ -615,7 +622,7 @@ export function useClinicalWorkbench() {
 
       const res = await fetch("/api/clinical-review", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getClientApiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           noteContext,
           externalEvidence: literatureEvidence,
@@ -625,8 +632,7 @@ export function useClinicalWorkbench() {
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `Clinical review failed (${res.status})`);
+        throw new Error(await readApiErrorMessage(res, `Clinical review failed (${res.status})`));
       }
 
       const reader = res.body?.getReader();
@@ -687,12 +693,16 @@ export function useClinicalWorkbench() {
       const form = new FormData();
       form.append("file", file);
 
-      const res = await fetch("/api/upload", { method: "POST", body: form });
-      const data = await res.json();
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: getClientApiHeaders(),
+        body: form,
+      });
 
       if (!res.ok) {
-        setUploadError(data.error ?? "Upload failed");
+        setUploadError(await readApiErrorMessage(res, "Upload failed"));
       } else {
+        const data = (await res.json()) as { text: string };
         setContext(data.text);
         setFileName(file.name);
         setAutoIndexEnabled(true);

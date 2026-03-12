@@ -146,7 +146,7 @@ export function BenchmarksPanel() {
                   unit: "%",
                 },
               ].map((stat) => (
-                <Card key={stat.label} className="p-3 bg-gradient-to-br from-indigo-50 to-cyan-50 dark:from-indigo-900/20 dark:to-cyan-900/20 border border-indigo-200 dark:border-indigo-800">
+                <Card key={stat.label} className="border border-indigo-200 bg-linear-to-br from-indigo-50 to-cyan-50 p-3 dark:border-indigo-800 dark:from-indigo-900/20 dark:to-cyan-900/20">
                   <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{stat.label}</div>
                   <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">
                     {stat.value}
@@ -283,7 +283,7 @@ function ProgressBar({ value }: { value: number }) {
     <div className="flex items-center gap-2">
       <div className="w-12 h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-indigo-500 to-cyan-500"
+          className="h-full bg-linear-to-r from-indigo-500 to-cyan-500"
           style={{ width: `${Math.min(value, 100)}%` }}
         />
       </div>
@@ -360,6 +360,9 @@ function ResultDetail({ result }: { result: BenchmarkResult }) {
                     <div key={idx} className="grid grid-cols-2 gap-2 p-2 bg-zinc-50 dark:bg-zinc-900/30 rounded">
                       <div>
                         Run {idx + 1}: {run.latencyMs}ms
+                        {!run.success && run.errorMessage ? (
+                          <p className="mt-1 text-[11px] text-red-600 dark:text-red-400">{run.errorMessage}</p>
+                        ) : null}
                       </div>
                       <div className="text-right">
                         {run.success ? (

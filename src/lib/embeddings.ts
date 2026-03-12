@@ -2,6 +2,7 @@ const EMBEDDING_MODEL = "models/gemini-embedding-001";
 const EMBEDDING_ENDPOINT =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent";
 const EMBEDDING_DIMENSION = 768;
+const EMBEDDING_TIMEOUT_MS = 30_000;
 
 type EmbedResponse = {
   embedding?: {
@@ -15,17 +16,26 @@ export async function embedText(text: string): Promise<number[]> {
     throw new Error("Missing GOOGLE_GENERATIVE_AI_API_KEY");
   }
 
-  const response = await fetch(`${EMBEDDING_ENDPOINT}?key=${apiKey}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: EMBEDDING_MODEL,
-      outputDimensionality: EMBEDDING_DIMENSION,
-      content: {
-        parts: [{ text }],
-      },
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${EMBEDDING_ENDPOINT}?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: EMBEDDING_MODEL,
+        outputDimensionality: EMBEDDING_DIMENSION,
+        content: {
+          parts: [{ text }],
+        },
+      }),
+      signal: AbortSignal.timeout(EMBEDDING_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "TimeoutError") {
+      throw new Error("Embedding request timed out. Please retry.");
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     const msg = await response.text();

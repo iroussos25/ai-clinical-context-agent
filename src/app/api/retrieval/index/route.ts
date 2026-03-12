@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server";
-
 import { chunkText } from "@/lib/chunking";
 import { embedText } from "@/lib/embeddings";
+import { writeAuditLog } from "@/lib/security/audit";
+import { runSecurityGuard } from "@/lib/security/guard";
+import { parseAndValidateJson } from "@/lib/security/parse";
+import { createJsonError, createJsonOk, getRequestId } from "@/lib/security/response";
+import { RetrievalIndexRequestSchema } from "@/lib/security/schemas";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 type InsertRow = {
@@ -21,22 +24,50 @@ function toVectorLiteral(values: number[]) {
 }
 
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const context = typeof body.context === "string" ? body.context.trim() : "";
-    const fileName = typeof body.fileName === "string" ? body.fileName : null;
-    const sourceType =
-      typeof body.sourceType === "string" && body.sourceType.trim()
-        ? body.sourceType
-        : "manual";
+  const requestId = getRequestId();
+  const startedAt = Date.now();
 
-    if (!context) {
-      return NextResponse.json({ error: "Context is required" }, { status: 400 });
+  const guard = runSecurityGuard(req, requestId, {
+    routeKey: "retrieval-index",
+    maxRequests: 20,
+    windowMs: 60_000,
+  });
+
+  if (!guard.ok) {
+    await writeAuditLog({
+      route: "/api/retrieval/index",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: guard.response.status,
+      durationMs: Date.now() - startedAt,
+      error: "security_guard_rejected",
+    });
+    return guard.response;
+  }
+
+  try {
+    const parsed = await parseAndValidateJson(req, RetrievalIndexRequestSchema);
+    if (!parsed.ok) {
+      await writeAuditLog({
+        route: "/api/retrieval/index",
+        method: "POST",
+        requestId,
+        ip: guard.ip,
+        status: 400,
+        durationMs: Date.now() - startedAt,
+        error: parsed.message,
+      });
+      return createJsonError(req, 400, parsed.message, requestId);
     }
+
+    const context = parsed.data.context;
+    const fileName = parsed.data.fileName ?? null;
+    const sourceType = parsed.data.sourceType ?? "manual";
 
     const chunks = chunkText(context, 1200, 220);
     if (chunks.length === 0) {
-      return NextResponse.json({ error: "No chunks were produced" }, { status: 400 });
+      return createJsonError(req, 400, "No chunks were produced", requestId);
     }
 
     const docId = crypto.randomUUID();
@@ -63,26 +94,39 @@ export async function POST(req: Request) {
     const { error } = await supabase.from("document_chunks").insert(rows);
 
     if (error) {
-      return NextResponse.json(
-        {
-          error:
-            "Failed to index chunks in Supabase. Ensure table document_chunks exists with vector support.",
-          details: error.message,
-        },
-        { status: 500 }
+      return createJsonError(
+        req,
+        500,
+        `Failed to index chunks in Supabase. ${error.message}`,
+        requestId
       );
     }
 
-    return NextResponse.json({
+    const response = createJsonOk(req, {
       docId,
       chunkCount: rows.length,
+    }, requestId);
+
+    await writeAuditLog({
+      route: "/api/retrieval/index",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: response.status,
+      durationMs: Date.now() - startedAt,
     });
+    return response;
   } catch (error) {
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Indexing failed",
-      },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : "Indexing failed";
+    await writeAuditLog({
+      route: "/api/retrieval/index",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: 500,
+      durationMs: Date.now() - startedAt,
+      error: message,
+    });
+    return createJsonError(req, 500, message, requestId);
   }
 }

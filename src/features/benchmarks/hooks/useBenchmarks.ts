@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { getClientApiHeaders, readApiErrorMessage } from "@/lib/client/api";
 import { BenchmarkMetrics, BenchmarkResult, BenchmarkState, ConsistencyRun } from "../types";
 import { BENCHMARK_SCENARIOS } from "../scenarios";
 
@@ -67,7 +68,7 @@ export function useBenchmarks() {
 
             const res = await fetch("/api/analyze", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: getClientApiHeaders({ "Content-Type": "application/json" }),
               body: JSON.stringify({
                 prompt: scenario.question,
                 context: scenario.context,
@@ -75,7 +76,7 @@ export function useBenchmarks() {
             });
 
             if (!res.ok) {
-              throw new Error(`API error: ${res.status}`);
+              throw new Error(await readApiErrorMessage(res, `API error: ${res.status}`));
             }
 
             let responseText = "";

@@ -11,6 +11,8 @@ const FALLBACK_MODELS = [
   "gemma-3-1b-it",
 ] as const;
 
+const MODEL_REQUEST_TIMEOUT_MS = 45_000;
+
 type GoogleCandidateResponse = {
   candidates?: Array<{
     content?: {
@@ -112,6 +114,7 @@ export async function generateGoogleText(options: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify(buildRequestBody(options, useSystemInstruction)),
+          signal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS),
         }
       );
 

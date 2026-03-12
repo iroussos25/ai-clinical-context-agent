@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
 import { PDFParse } from "pdf-parse";
+import { writeAuditLog } from "@/lib/security/audit";
+import { runSecurityGuard } from "@/lib/security/guard";
+import { createJsonError, createJsonOk, getRequestId } from "@/lib/security/response";
 
 const TEXT_EXTENSIONS = new Set([
   "txt",
@@ -14,18 +16,55 @@ const TEXT_EXTENSIONS = new Set([
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 export async function POST(req: Request) {
+  const requestId = getRequestId();
+  const startedAt = Date.now();
+
+  const guard = runSecurityGuard(req, requestId, {
+    routeKey: "upload",
+    maxRequests: 12,
+    windowMs: 60_000,
+  });
+
+  if (!guard.ok) {
+    await writeAuditLog({
+      route: "/api/upload",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: guard.response.status,
+      durationMs: Date.now() - startedAt,
+      error: "security_guard_rejected",
+    });
+    return guard.response;
+  }
+
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
 
   if (!file) {
-    return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    await writeAuditLog({
+      route: "/api/upload",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: 400,
+      durationMs: Date.now() - startedAt,
+      error: "No file provided",
+    });
+    return createJsonError(req, 400, "No file provided", requestId);
   }
 
   if (file.size > MAX_FILE_SIZE) {
-    return NextResponse.json(
-      { error: "File exceeds 10 MB limit" },
-      { status: 400 }
-    );
+    await writeAuditLog({
+      route: "/api/upload",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: 400,
+      durationMs: Date.now() - startedAt,
+      error: "File exceeds size limit",
+    });
+    return createJsonError(req, 400, "File exceeds 10 MB limit", requestId);
   }
 
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -42,11 +81,20 @@ export async function POST(req: Request) {
     } else if (TEXT_EXTENSIONS.has(ext)) {
       text = await file.text();
     } else {
-      return NextResponse.json(
-        {
-          error: `Unsupported file type: .${ext}. Accepted: .pdf, .txt, .csv, .md, .xml, .json, .tsv, .hl7`,
-        },
-        { status: 400 }
+      await writeAuditLog({
+        route: "/api/upload",
+        method: "POST",
+        requestId,
+        ip: guard.ip,
+        status: 400,
+        durationMs: Date.now() - startedAt,
+        error: `Unsupported file type: ${ext}`,
+      });
+      return createJsonError(
+        req,
+        400,
+        `Unsupported file type: .${ext}. Accepted: .pdf, .txt, .csv, .md, .xml, .json, .tsv, .hl7`,
+        requestId
       );
     }
 
@@ -58,17 +106,39 @@ export async function POST(req: Request) {
       .trim();
 
     if (!text) {
-      return NextResponse.json(
-        { error: "File appears to be empty or could not be read" },
-        { status: 400 }
-      );
+      await writeAuditLog({
+        route: "/api/upload",
+        method: "POST",
+        requestId,
+        ip: guard.ip,
+        status: 400,
+        durationMs: Date.now() - startedAt,
+        error: "Parsed text was empty",
+      });
+      return createJsonError(req, 400, "File appears to be empty or could not be read", requestId);
     }
 
-    return NextResponse.json({ text });
-  } catch {
-    return NextResponse.json(
-      { error: "Failed to parse file" },
-      { status: 500 }
-    );
+    const response = createJsonOk(req, { text }, requestId);
+    await writeAuditLog({
+      route: "/api/upload",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: response.status,
+      durationMs: Date.now() - startedAt,
+    });
+    return response;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to parse file";
+    await writeAuditLog({
+      route: "/api/upload",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: 500,
+      durationMs: Date.now() - startedAt,
+      error: message,
+    });
+    return createJsonError(req, 500, message, requestId);
   }
 }

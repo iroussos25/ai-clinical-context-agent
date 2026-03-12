@@ -1,4 +1,9 @@
 import { generateGoogleText } from "@/lib/google-text";
+import { writeAuditLog } from "@/lib/security/audit";
+import { runSecurityGuard } from "@/lib/security/guard";
+import { parseAndValidateJson } from "@/lib/security/parse";
+import { createJsonError, createTextResponse, getRequestId } from "@/lib/security/response";
+import { AnalyzeRequestSchema } from "@/lib/security/schemas";
 
 const SYSTEM_PROMPT = `You are a Clinical Data Integrity Specialist. Your sole responsibility is to analyze and answer questions based strictly on the clinical document context provided below.
 
@@ -11,17 +16,43 @@ Rules you must follow:
 6. If the context contains ambiguous or potentially conflicting information, flag it explicitly rather than choosing one interpretation silently.`;
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { prompt, context } = body;
+  const requestId = getRequestId();
+  const startedAt = Date.now();
 
-  if (
-    typeof prompt !== "string" ||
-    typeof context !== "string" ||
-    !prompt.trim() ||
-    !context.trim()
-  ) {
-    return new Response("Invalid input", { status: 400 });
+  const guard = runSecurityGuard(req, requestId, {
+    routeKey: "analyze",
+    maxRequests: 50,
+    windowMs: 60_000,
+  });
+
+  if (!guard.ok) {
+    await writeAuditLog({
+      route: "/api/analyze",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: guard.response.status,
+      durationMs: Date.now() - startedAt,
+      error: "security_guard_rejected",
+    });
+    return guard.response;
   }
+
+  const parsed = await parseAndValidateJson(req, AnalyzeRequestSchema);
+  if (!parsed.ok) {
+    await writeAuditLog({
+      route: "/api/analyze",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: 400,
+      durationMs: Date.now() - startedAt,
+      error: parsed.message,
+    });
+    return createJsonError(req, 400, parsed.message, requestId);
+  }
+
+  const { prompt, context } = parsed.data;
 
   // Sanitize inputs: strip null bytes and dangerous control characters
   const cleanPrompt = prompt.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").trim();
@@ -38,16 +69,31 @@ export async function POST(req: Request) {
       ],
     });
 
-    return new Response(result.text, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "X-Model-Used": result.model,
-      },
+    const response = createTextResponse(req, 200, result.text, requestId, {
+      "X-Model-Used": result.model,
     });
+
+    await writeAuditLog({
+      route: "/api/analyze",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: response.status,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return response;
   } catch (error) {
-    return new Response(
-      error instanceof Error ? error.message : "Clinical analysis failed",
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : "Clinical analysis failed";
+    await writeAuditLog({
+      route: "/api/analyze",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: 500,
+      durationMs: Date.now() - startedAt,
+      error: message,
+    });
+    return createJsonError(req, 500, message, requestId);
   }
 }

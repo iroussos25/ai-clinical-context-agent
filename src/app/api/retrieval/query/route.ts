@@ -1,6 +1,9 @@
-import { NextResponse } from "next/server";
-
 import { embedText } from "@/lib/embeddings";
+import { writeAuditLog } from "@/lib/security/audit";
+import { runSecurityGuard } from "@/lib/security/guard";
+import { parseAndValidateJson } from "@/lib/security/parse";
+import { createJsonError, createJsonOk, getRequestId } from "@/lib/security/response";
+import { RetrievalQueryRequestSchema } from "@/lib/security/schemas";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 type QueryResult = {
@@ -41,18 +44,46 @@ function toVectorLiteral(values: number[]) {
 }
 
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const query = typeof body.query === "string" ? body.query.trim() : "";
-    const docId = typeof body.docId === "string" ? body.docId : null;
-    const topK =
-      typeof body.topK === "number" && body.topK > 0 && body.topK <= 12
-        ? body.topK
-        : 6;
+  const requestId = getRequestId();
+  const startedAt = Date.now();
 
-    if (!query) {
-      return NextResponse.json({ error: "Query is required" }, { status: 400 });
+  const guard = runSecurityGuard(req, requestId, {
+    routeKey: "retrieval-query",
+    maxRequests: 60,
+    windowMs: 60_000,
+  });
+
+  if (!guard.ok) {
+    await writeAuditLog({
+      route: "/api/retrieval/query",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: guard.response.status,
+      durationMs: Date.now() - startedAt,
+      error: "security_guard_rejected",
+    });
+    return guard.response;
+  }
+
+  try {
+    const parsed = await parseAndValidateJson(req, RetrievalQueryRequestSchema);
+    if (!parsed.ok) {
+      await writeAuditLog({
+        route: "/api/retrieval/query",
+        method: "POST",
+        requestId,
+        ip: guard.ip,
+        status: 400,
+        durationMs: Date.now() - startedAt,
+        error: parsed.message,
+      });
+      return createJsonError(req, 400, parsed.message, requestId);
     }
+
+    const query = parsed.data.query;
+    const docId = parsed.data.docId ?? null;
+    const topK = parsed.data.topK ?? 6;
 
     const queryEmbedding = await embedText(query);
     const supabase = getSupabaseServerClient();
@@ -67,7 +98,7 @@ export async function POST(req: Request) {
     );
 
     if (!rpcError && Array.isArray(rpcData)) {
-      return NextResponse.json({
+      const response = createJsonOk(req, {
         evidence: (rpcData as QueryResult[]).map((row) => ({
           id: row.id,
           chunkIndex: row.chunk_index,
@@ -75,7 +106,17 @@ export async function POST(req: Request) {
           similarity: row.similarity,
           sourceLabel: row.metadata?.fileName ?? "Clinical context",
         })),
+      }, requestId);
+
+      await writeAuditLog({
+        route: "/api/retrieval/query",
+        method: "POST",
+        requestId,
+        ip: guard.ip,
+        status: response.status,
+        durationMs: Date.now() - startedAt,
       });
+      return response;
     }
 
     let selectBuilder = supabase
@@ -90,12 +131,11 @@ export async function POST(req: Request) {
     const { data: fallbackData, error: fallbackError } = await selectBuilder;
 
     if (fallbackError || !fallbackData) {
-      return NextResponse.json(
-        {
-          error: "Retrieval failed.",
-          details: fallbackError?.message ?? rpcError?.message,
-        },
-        { status: 500 }
+      return createJsonError(
+        req,
+        500,
+        `Retrieval failed. ${fallbackError?.message ?? rpcError?.message ?? "Unknown error"}`,
+        requestId
       );
     }
 
@@ -111,13 +151,27 @@ export async function POST(req: Request) {
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, topK);
 
-    return NextResponse.json({ evidence: ranked });
+    const response = createJsonOk(req, { evidence: ranked }, requestId);
+    await writeAuditLog({
+      route: "/api/retrieval/query",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: response.status,
+      durationMs: Date.now() - startedAt,
+    });
+    return response;
   } catch (error) {
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Retrieval query failed",
-      },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : "Retrieval query failed";
+    await writeAuditLog({
+      route: "/api/retrieval/query",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: 500,
+      durationMs: Date.now() - startedAt,
+      error: message,
+    });
+    return createJsonError(req, 500, message, requestId);
   }
 }

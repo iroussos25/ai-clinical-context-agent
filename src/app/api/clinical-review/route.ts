@@ -1,4 +1,9 @@
 import { generateGoogleText } from "@/lib/google-text";
+import { writeAuditLog } from "@/lib/security/audit";
+import { runSecurityGuard } from "@/lib/security/guard";
+import { parseAndValidateJson } from "@/lib/security/parse";
+import { createJsonError, createTextResponse, getRequestId } from "@/lib/security/response";
+import { ClinicalReviewRequestSchema } from "@/lib/security/schemas";
 
 type ExternalEvidenceInput = {
   title?: string;
@@ -39,16 +44,45 @@ Final line requirement:
 Add this exact sentence at the end of every response: "For clinical decision support research only. Not for diagnostic use. Verify with a licensed healthcare professional."`;
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const noteContext = typeof body.noteContext === "string" ? body.noteContext : "";
-  const externalEvidence = Array.isArray(body.externalEvidence)
-    ? (body.externalEvidence as ExternalEvidenceInput[])
-    : [];
-  const messages = Array.isArray(body.messages) ? (body.messages as ClinicalReviewInputMessage[]) : [];
+  const requestId = getRequestId();
+  const startedAt = Date.now();
 
-  if (!noteContext.trim() || messages.length === 0) {
-    return new Response("Invalid input", { status: 400 });
+  const guard = runSecurityGuard(req, requestId, {
+    routeKey: "clinical-review",
+    maxRequests: 30,
+    windowMs: 60_000,
+  });
+
+  if (!guard.ok) {
+    await writeAuditLog({
+      route: "/api/clinical-review",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: guard.response.status,
+      durationMs: Date.now() - startedAt,
+      error: "security_guard_rejected",
+    });
+    return guard.response;
   }
+
+  const parsed = await parseAndValidateJson(req, ClinicalReviewRequestSchema);
+  if (!parsed.ok) {
+    await writeAuditLog({
+      route: "/api/clinical-review",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: 400,
+      durationMs: Date.now() - startedAt,
+      error: parsed.message,
+    });
+    return createJsonError(req, 400, parsed.message, requestId);
+  }
+
+  const noteContext = parsed.data.noteContext;
+  const externalEvidence = parsed.data.externalEvidence as ExternalEvidenceInput[];
+  const messages = parsed.data.messages as ClinicalReviewInputMessage[];
 
   const cleanNoteContext = noteContext.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").trim();
   const cleanExternalContext = externalEvidence
@@ -84,7 +118,16 @@ export async function POST(req: Request) {
     }));
 
   if (cleanMessages.length === 0) {
-    return new Response("Invalid input", { status: 400 });
+    await writeAuditLog({
+      route: "/api/clinical-review",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: 400,
+      durationMs: Date.now() - startedAt,
+      error: "No valid messages after sanitization",
+    });
+    return createJsonError(req, 400, "No valid messages after sanitization", requestId);
   }
 
   try {
@@ -97,16 +140,31 @@ export async function POST(req: Request) {
       messages: cleanMessages,
     });
 
-    return new Response(result.text, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "X-Model-Used": result.model,
-      },
+    const response = createTextResponse(req, 200, result.text, requestId, {
+      "X-Model-Used": result.model,
     });
+
+    await writeAuditLog({
+      route: "/api/clinical-review",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: response.status,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return response;
   } catch (error) {
-    return new Response(
-      error instanceof Error ? error.message : "Clinical review failed",
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : "Clinical review failed";
+    await writeAuditLog({
+      route: "/api/clinical-review",
+      method: "POST",
+      requestId,
+      ip: guard.ip,
+      status: 500,
+      durationMs: Date.now() - startedAt,
+      error: message,
+    });
+    return createJsonError(req, 500, message, requestId);
   }
 }

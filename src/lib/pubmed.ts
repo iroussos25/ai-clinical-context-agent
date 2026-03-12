@@ -1,5 +1,7 @@
 import { ExternalLiteratureEvidence } from "@/features/clinical/types";
 
+const PUBMED_REQUEST_TIMEOUT_MS = 25_000;
+
 const TOPIC_PATTERNS: Array<{ pattern: RegExp; terms: string[] }> = [
   {
     pattern: /(sepsis|septic shock|lactate|vasopressor|hypotension|map|infection|cultures?)/i,
@@ -99,7 +101,10 @@ type ESummaryResponse = {
 
 async function fetchPubMedAbstracts(pmids: string[]) {
   const response = await fetch(
-    `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${pmids.join(",")}&retmode=xml`
+    `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${pmids.join(",")}&retmode=xml`,
+    {
+      signal: AbortSignal.timeout(PUBMED_REQUEST_TIMEOUT_MS),
+    }
   );
 
   if (!response.ok) {
@@ -142,6 +147,7 @@ export async function searchPubMedLiterature(
     headers: {
       Accept: "application/json",
     },
+    signal: AbortSignal.timeout(PUBMED_REQUEST_TIMEOUT_MS),
   });
 
   if (!searchResponse.ok) {
@@ -161,6 +167,7 @@ export async function searchPubMedLiterature(
       headers: {
         Accept: "application/json",
       },
+      signal: AbortSignal.timeout(PUBMED_REQUEST_TIMEOUT_MS),
     }
   );
 
