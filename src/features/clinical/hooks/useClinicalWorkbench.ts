@@ -1,16 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-import { STORAGE_KEY } from "@/features/clinical/constants";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { FhirBundle, FhirMode, FhirResource, HistoryItem, RecruiterKit, EvidenceItem } from "@/features/clinical/types";
-
-type PersistedState = {
-  context?: string;
-  fileName?: string | null;
-  input?: string;
-  completion?: string;
-  history?: HistoryItem[];
-  indexedDocId?: string | null;
-};
 
 export function useClinicalWorkbench() {
   const [context, setContext] = useState("");
@@ -44,38 +33,6 @@ export function useClinicalWorkbench() {
   const [fhirResults, setFhirResults] = useState<FhirResource[]>([]);
   const [fhirCount, setFhirCount] = useState(0);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-
-      const saved = JSON.parse(raw) as PersistedState;
-      if (typeof saved.context === "string") setContext(saved.context);
-      if (typeof saved.fileName === "string" || saved.fileName === null) {
-        setFileName(saved.fileName ?? null);
-      }
-      if (typeof saved.input === "string") setInput(saved.input);
-      if (typeof saved.completion === "string") setCompletion(saved.completion);
-      if (Array.isArray(saved.history)) setHistory(saved.history.slice(0, 12));
-      if (typeof saved.indexedDocId === "string") setIndexedDocId(saved.indexedDocId);
-    } catch {
-      // Ignore malformed local storage.
-    }
-  }, []);
-
-  useEffect(() => {
-    const payload: PersistedState = {
-      context,
-      fileName,
-      input,
-      completion,
-      history: history.slice(0, 12),
-      indexedDocId,
-    };
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [context, fileName, input, completion, history, indexedDocId]);
-
   const matchCount = useMemo(() => {
     if (!search.trim() || !context) return 0;
     const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -102,6 +59,40 @@ export function useClinicalWorkbench() {
 
   const clearHistory = useCallback(() => {
     setHistory([]);
+  }, []);
+
+  const clearAllState = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+
+    setContext("");
+    setFileName(null);
+    setUploading(false);
+    setUploadError(null);
+    setSearch("");
+
+    setApiError(null);
+    setCompletion("");
+    setInput("");
+    setIsLoading(false);
+    setHistory([]);
+    setEvidence([]);
+
+    setRetrievalEnabled(true);
+    setIndexing(false);
+    setIndexError(null);
+    setIndexedDocId(null);
+
+    setDemoMode(false);
+    setDemoStep(1);
+
+    setFhirServer("https://hapi.fhir.org/baseR4");
+    setFhirMode("Patient");
+    setFhirQuery("");
+    setFhirLoading(false);
+    setFhirError(null);
+    setFhirResults([]);
+    setFhirCount(0);
   }, []);
 
   function cancelStreaming() {
@@ -386,6 +377,7 @@ export function useClinicalWorkbench() {
     searchFhir,
     loadRecruiterKit,
     clearHistory,
+    clearAllState,
     indexCurrentContext,
     startDemoMode,
     advanceDemoStep,

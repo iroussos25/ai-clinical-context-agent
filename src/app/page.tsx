@@ -27,6 +27,16 @@ export default function Home() {
     setActivePanel("workbench");
   }
 
+  function handleClearAll() {
+    const confirmed = window.confirm(
+      "Clear all app data? This will reset context, analyses, retrieval state, and FHIR results."
+    );
+    if (!confirmed) return;
+
+    vm.clearAllState();
+    setActivePanel("workbench");
+  }
+
   return (
     <div className="relative min-h-screen bg-linear-to-br from-zinc-50 via-white to-zinc-100 px-4 py-10 font-(family-name:--font-geist-sans) dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -44,31 +54,40 @@ export default function Home() {
             transition={{ duration: 0.5 }}
             className="space-y-1"
           >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-500/25">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-5 w-5"
-                >
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
-                  <path d="M14 2v6h6" />
-                  <path d="m9 15 2 2 4-4" />
-                </svg>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-500/25">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-5 w-5"
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                    <path d="M14 2v6h6" />
+                    <path d="m9 15 2 2 4-4" />
+                  </svg>
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                    Clinical Document Analyst
+                  </h1>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    AI-powered clinical data integrity review
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-                  Clinical Document Analyst
-                </h1>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  AI-powered clinical data integrity review
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={handleClearAll}
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                Clear All
+              </button>
             </div>
           </motion.header>
 
