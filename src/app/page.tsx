@@ -158,6 +158,11 @@ export default function Home() {
                   clinicalReviewError={vm.clinicalReviewError}
                   clinicalReviewEvidence={vm.clinicalReviewEvidence}
                   clinicalReviewTrace={vm.clinicalReviewTrace}
+                  clinicalReviewUseLiterature={vm.clinicalReviewUseLiterature}
+                  setClinicalReviewUseLiterature={vm.setClinicalReviewUseLiterature}
+                  clinicalReviewLiteratureQuery={vm.clinicalReviewLiteratureQuery}
+                  clinicalReviewLiteratureEvidence={vm.clinicalReviewLiteratureEvidence}
+                  clinicalReviewLiteratureError={vm.clinicalReviewLiteratureError}
                   retrievalEnabled={vm.retrievalEnabled}
                   onSubmitClinicalReview={vm.submitClinicalReview}
                   onCancelStreaming={vm.cancelStreaming}

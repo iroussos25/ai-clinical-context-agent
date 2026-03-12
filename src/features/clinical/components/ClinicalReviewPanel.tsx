@@ -4,7 +4,12 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { Card } from "@/components/ui/Card";
-import { AnalysisTrace, ClinicalReviewMessage, EvidenceItem } from "@/features/clinical/types";
+import {
+  AnalysisTrace,
+  ClinicalReviewMessage,
+  EvidenceItem,
+  ExternalLiteratureEvidence,
+} from "@/features/clinical/types";
 
 type ClinicalReviewPanelProps = {
   context: string;
@@ -16,6 +21,11 @@ type ClinicalReviewPanelProps = {
   clinicalReviewError: string | null;
   clinicalReviewEvidence: EvidenceItem[];
   clinicalReviewTrace: AnalysisTrace | null;
+  clinicalReviewUseLiterature: boolean;
+  setClinicalReviewUseLiterature: (value: boolean) => void;
+  clinicalReviewLiteratureQuery: string | null;
+  clinicalReviewLiteratureEvidence: ExternalLiteratureEvidence[];
+  clinicalReviewLiteratureError: string | null;
   retrievalEnabled: boolean;
   onSubmitClinicalReview: (promptOverride?: string) => Promise<void>;
   onCancelStreaming: () => void;
@@ -32,6 +42,11 @@ export function ClinicalReviewPanel({
   clinicalReviewError,
   clinicalReviewEvidence,
   clinicalReviewTrace,
+  clinicalReviewUseLiterature,
+  setClinicalReviewUseLiterature,
+  clinicalReviewLiteratureQuery,
+  clinicalReviewLiteratureEvidence,
+  clinicalReviewLiteratureError,
   retrievalEnabled,
   onSubmitClinicalReview,
   onCancelStreaming,
@@ -117,8 +132,17 @@ export function ClinicalReviewPanel({
               </p>
             </div>
             <label className="flex items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
-              <span>Guideline grounding</span>
-              <span className="rounded-full bg-zinc-200 px-2 py-1 dark:bg-zinc-800">Coming soon</span>
+              <div>
+                <p className="font-medium text-zinc-800 dark:text-zinc-100">
+                  External literature grounding
+                </p>
+                <p className="mt-1">Uses PubMed abstracts with PMC links when available.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={clinicalReviewUseLiterature}
+                onChange={(e) => setClinicalReviewUseLiterature(e.target.checked)}
+              />
             </label>
           </div>
         </div>
@@ -195,6 +219,11 @@ export function ClinicalReviewPanel({
                               <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
                                 Context-verified against loaded note
                               </span>
+                                {clinicalReviewUseLiterature && clinicalReviewLiteratureEvidence.length > 0 && (
+                                  <span className="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-[11px] font-medium text-cyan-700 dark:border-cyan-900/50 dark:bg-cyan-950/40 dark:text-cyan-300">
+                                    PubMed/PMC literature grounded
+                                  </span>
+                                )}
                             </div>
                             <div className="prose prose-sm max-w-none prose-zinc dark:prose-invert">
                               <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -237,7 +266,7 @@ export function ClinicalReviewPanel({
                             {isLatestAssistant && clinicalReviewEvidence.length > 0 && (
                               <details className="rounded-xl border border-cyan-200 bg-cyan-50/60 p-3 dark:border-cyan-900/40 dark:bg-cyan-950/20">
                                 <summary className="cursor-pointer text-xs font-medium text-cyan-700 dark:text-cyan-300">
-                                  Supporting Evidence
+                                  Supporting Note Evidence
                                 </summary>
                                 <div className="mt-3 space-y-3">
                                   {clinicalReviewEvidence.map((item) => (
@@ -250,6 +279,82 @@ export function ClinicalReviewPanel({
                                       </p>
                                       <p className="mt-2 whitespace-pre-wrap text-xs text-zinc-700 dark:text-zinc-300">
                                         {item.content}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </details>
+                            )}
+
+                            {isLatestAssistant && clinicalReviewUseLiterature && (
+                              <details className="rounded-xl border border-violet-200 bg-violet-50/60 p-3 dark:border-violet-900/40 dark:bg-violet-950/20">
+                                <summary className="cursor-pointer text-xs font-medium text-violet-700 dark:text-violet-300">
+                                  Supporting External Literature
+                                </summary>
+
+                                <div className="mt-3 space-y-3">
+                                  {clinicalReviewLiteratureQuery && (
+                                    <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
+                                      <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                                        PubMed Query Used
+                                      </p>
+                                      <p className="mt-1 text-xs text-zinc-700 dark:text-zinc-300">
+                                        {clinicalReviewLiteratureQuery}
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {clinicalReviewLiteratureError && (
+                                    <p className="text-xs text-red-500">
+                                      External literature warning: {clinicalReviewLiteratureError}
+                                    </p>
+                                  )}
+
+                                  {clinicalReviewLiteratureEvidence.length === 0 && !clinicalReviewLiteratureError && (
+                                    <p className="text-xs text-zinc-600 dark:text-zinc-300">
+                                      No external literature snippets were retrieved for this question.
+                                    </p>
+                                  )}
+
+                                  {clinicalReviewLiteratureEvidence.map((item) => (
+                                    <div
+                                      key={item.id}
+                                      className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/50"
+                                    >
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <div>
+                                          <p className="text-xs font-medium text-zinc-800 dark:text-zinc-100">
+                                            {item.title}
+                                          </p>
+                                          <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                                            {item.journal ?? "Unknown journal"}
+                                            {item.publishedAt ? ` | ${item.publishedAt}` : ""}
+                                          </p>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 text-[11px]">
+                                          <a
+                                            href={item.sourceUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="rounded border border-zinc-300 px-2 py-1 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                                          >
+                                            PubMed
+                                          </a>
+                                          {item.pmcUrl && (
+                                            <a
+                                              href={item.pmcUrl}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="rounded border border-zinc-300 px-2 py-1 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                                            >
+                                              PMC
+                                            </a>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      <p className="mt-2 whitespace-pre-wrap text-xs text-zinc-700 dark:text-zinc-300">
+                                        {item.abstractSnippet}
                                       </p>
                                     </div>
                                   ))}
@@ -278,7 +383,7 @@ export function ClinicalReviewPanel({
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Note-only clinical review for v1. Guideline grounding will layer on top later.
+                Uses note evidence plus optional PubMed/PMC-backed literature grounding for broader clinical review.
               </p>
               <div className="flex items-center gap-2">
                 {clinicalReviewLoading && (

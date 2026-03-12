@@ -3,6 +3,7 @@ import {
   AnalysisTrace,
   ClinicalReviewMessage,
   EvidenceItem,
+  ExternalLiteratureEvidence,
   FhirBundle,
   FhirMode,
   FhirResource,
@@ -30,6 +31,12 @@ export function useClinicalWorkbench() {
   const [clinicalReviewError, setClinicalReviewError] = useState<string | null>(null);
   const [clinicalReviewEvidence, setClinicalReviewEvidence] = useState<EvidenceItem[]>([]);
   const [clinicalReviewTrace, setClinicalReviewTrace] = useState<AnalysisTrace | null>(null);
+  const [clinicalReviewUseLiterature, setClinicalReviewUseLiterature] = useState(true);
+  const [clinicalReviewLiteratureQuery, setClinicalReviewLiteratureQuery] = useState<string | null>(null);
+  const [clinicalReviewLiteratureEvidence, setClinicalReviewLiteratureEvidence] = useState<
+    ExternalLiteratureEvidence[]
+  >([]);
+  const [clinicalReviewLiteratureError, setClinicalReviewLiteratureError] = useState<string | null>(null);
   const [rubricScores, setRubricScores] = useState<Record<string, Record<number, number>>>({});
 
   const [retrievalEnabled, setRetrievalEnabled] = useState(true);
@@ -85,6 +92,9 @@ export function useClinicalWorkbench() {
     setClinicalReviewError(null);
     setClinicalReviewEvidence([]);
     setClinicalReviewTrace(null);
+    setClinicalReviewLiteratureQuery(null);
+    setClinicalReviewLiteratureEvidence([]);
+    setClinicalReviewLiteratureError(null);
   }, []);
 
   const setRubricScore = useCallback((kitId: string, criterionIndex: number, score: number) => {
@@ -123,6 +133,7 @@ export function useClinicalWorkbench() {
     setEvidence([]);
     setAnalysisTrace(null);
     clearClinicalReview();
+    setClinicalReviewUseLiterature(true);
     setRubricScores({});
 
     setRetrievalEnabled(true);
@@ -182,9 +193,14 @@ export function useClinicalWorkbench() {
     }
   }
 
-  async function fetchEvidence(prompt: string) {
+  async function fetchEvidence(
+    prompt: string,
+    options?: { updateWorkbenchEvidence?: boolean }
+  ) {
     if (!retrievalEnabled || !indexedDocId) {
-      setEvidence([]);
+      if (options?.updateWorkbenchEvidence !== false) {
+        setEvidence([]);
+      }
       return [] as EvidenceItem[];
     }
 
@@ -207,7 +223,10 @@ export function useClinicalWorkbench() {
       ? (data.evidence as EvidenceItem[])
       : [];
 
-    setEvidence(nextEvidence);
+    if (options?.updateWorkbenchEvidence !== false) {
+      setEvidence(nextEvidence);
+    }
+
     return nextEvidence;
   }
 
@@ -323,11 +342,45 @@ export function useClinicalWorkbench() {
     setClinicalReviewInput("");
     setClinicalReviewEvidence([]);
     setClinicalReviewTrace(null);
+    setClinicalReviewLiteratureQuery(null);
+    setClinicalReviewLiteratureEvidence([]);
+    setClinicalReviewLiteratureError(null);
     setClinicalReviewMessages((prev) => [...prev, userMessage, assistantMessage]);
 
     try {
-      const retrieved = await fetchEvidence(promptSnapshot);
-      const retrievalContext =
+      const retrieved = await fetchEvidence(promptSnapshot, { updateWorkbenchEvidence: false });
+
+      let literatureResult: {
+        query?: string | null;
+        evidence?: ExternalLiteratureEvidence[];
+      } = { query: null, evidence: [] };
+
+      if (clinicalReviewUseLiterature) {
+        try {
+          const literatureResponse = await fetch("/api/clinical-review/sources", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: promptSnapshot, context }),
+            signal: controller.signal,
+          });
+
+          if (!literatureResponse.ok) {
+            const text = await literatureResponse.text();
+            throw new Error(text || `Literature search failed (${literatureResponse.status})`);
+          }
+
+          literatureResult = (await literatureResponse.json()) as {
+            query?: string;
+            evidence?: ExternalLiteratureEvidence[];
+          };
+        } catch (error) {
+          setClinicalReviewLiteratureError(
+            error instanceof Error ? error.message : "External literature grounding failed"
+          );
+        }
+      }
+
+      const noteContext =
         retrieved.length > 0
           ? retrieved
               .map(
@@ -337,10 +390,28 @@ export function useClinicalWorkbench() {
               .join("\n\n")
           : context;
 
+      const literatureEvidence = Array.isArray(literatureResult.evidence)
+        ? literatureResult.evidence
+        : [];
+      const literatureContext = literatureEvidence
+        .map(
+          (item, index) =>
+            `[literature ${index + 1} | ${item.sourceLabel} | ${item.journal ?? "Unknown journal"} | ${item.publishedAt ?? "Unknown date"}]\nTitle: ${item.title}\nAbstract: ${item.abstractSnippet}`
+        )
+        .join("\n\n");
+
+      const combinedContext = literatureContext
+        ? `${noteContext}\n\n<external_literature_context>\n${literatureContext}\n</external_literature_context>`
+        : noteContext;
+
       setClinicalReviewEvidence(retrieved);
+      setClinicalReviewLiteratureQuery(
+        typeof literatureResult.query === "string" ? literatureResult.query : null
+      );
+      setClinicalReviewLiteratureEvidence(literatureEvidence);
       setClinicalReviewTrace({
         prompt: promptSnapshot,
-        contextSent: retrievalContext,
+        contextSent: combinedContext,
         usedRetrieval: retrieved.length > 0,
         indexedDocId,
       });
@@ -349,7 +420,8 @@ export function useClinicalWorkbench() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: retrievalContext,
+          noteContext,
+          externalEvidence: literatureEvidence,
           messages: [...priorMessages, { role: "user", content: promptSnapshot }],
         }),
         signal: controller.signal,
@@ -532,6 +604,11 @@ export function useClinicalWorkbench() {
     clinicalReviewError,
     clinicalReviewEvidence,
     clinicalReviewTrace,
+    clinicalReviewUseLiterature,
+    setClinicalReviewUseLiterature,
+    clinicalReviewLiteratureQuery,
+    clinicalReviewLiteratureEvidence,
+    clinicalReviewLiteratureError,
     rubricScores,
 
     retrievalEnabled,

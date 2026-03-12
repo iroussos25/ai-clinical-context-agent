@@ -58,3 +58,14 @@ export type AnalysisTrace = {
   usedRetrieval: boolean;
   indexedDocId: string | null;
 };
+
+export type ExternalLiteratureEvidence = {
+  id: string;
+  title: string;
+  abstractSnippet: string;
+  journal?: string;
+  publishedAt?: string;
+  sourceLabel: string;
+  sourceUrl: string;
+  pmcUrl?: string;
+};
