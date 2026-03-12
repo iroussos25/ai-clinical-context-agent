@@ -114,6 +114,11 @@ export function ClinicalWorkbenchPanel({
           </div>
         </div>
 
+        <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+          Indexing turns this document into searchable AI vectors so question answers can use the
+          most relevant chunks with citations.
+        </p>
+
         {indexError && <p className="mt-2 text-xs text-red-500">Error: {indexError}</p>}
       </Card>
 

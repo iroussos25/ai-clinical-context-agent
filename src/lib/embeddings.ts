@@ -1,5 +1,7 @@
+const EMBEDDING_MODEL = "models/gemini-embedding-001";
 const EMBEDDING_ENDPOINT =
-  "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent";
+const EMBEDDING_DIMENSION = 768;
 
 type EmbedResponse = {
   embedding?: {
@@ -17,7 +19,8 @@ export async function embedText(text: string): Promise<number[]> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "models/text-embedding-004",
+      model: EMBEDDING_MODEL,
+      outputDimensionality: EMBEDDING_DIMENSION,
       content: {
         parts: [{ text }],
       },
@@ -34,6 +37,12 @@ export async function embedText(text: string): Promise<number[]> {
 
   if (!values || values.length === 0) {
     throw new Error("Embedding response did not include vector values.");
+  }
+
+  if (values.length !== EMBEDDING_DIMENSION) {
+    throw new Error(
+      `Embedding dimension mismatch. Expected ${EMBEDDING_DIMENSION}, received ${values.length}.`
+    );
   }
 
   return values;
