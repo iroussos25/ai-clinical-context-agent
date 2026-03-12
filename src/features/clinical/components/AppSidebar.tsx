@@ -11,6 +11,7 @@ const ITEMS: { key: Panel; label: string }[] = [
   { key: "clinical-review", label: "Clinical Review" },
   { key: "recruiter-kit", label: "Recruiter Test Kits" },
   { key: "fhir", label: "FHIR Explorer (Beta)" },
+  { key: "benchmarks", label: "Benchmarks" },
 ];
 
 export function AppSidebar({ activePanel, setActivePanel }: SidebarProps) {

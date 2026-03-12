@@ -1,4 +1,4 @@
-export type Panel = "workbench" | "clinical-review" | "recruiter-kit" | "fhir";
+export type Panel = "workbench" | "clinical-review" | "recruiter-kit" | "fhir" | "benchmarks";
 
 export type ClinicalReviewMessage = {
   id: string;

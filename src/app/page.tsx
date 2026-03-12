@@ -9,6 +9,7 @@ import { ClinicalWorkbenchPanel } from "@/features/clinical/components/ClinicalW
 import { DemoGuide } from "@/features/clinical/components/DemoGuide";
 import { FhirExplorerPanel } from "@/features/clinical/components/FhirExplorerPanel";
 import { RecruiterKitPanel } from "@/features/clinical/components/RecruiterKitPanel";
+import { BenchmarksPanel } from "@/features/benchmarks/components/BenchmarksPanel";
 import { RECRUITER_KITS } from "@/features/clinical/constants";
 import { useClinicalWorkbench } from "@/features/clinical/hooks/useClinicalWorkbench";
 import { Panel } from "@/features/clinical/types";
@@ -226,6 +227,18 @@ export default function Home() {
                   onClearResults={vm.clearFhirResults}
                   onSendResourceToWorkbench={handleSendFhirToWorkbench}
                 />
+              </motion.div>
+            )}
+
+            {activePanel === "benchmarks" && (
+              <motion.div
+                key="benchmarks"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <BenchmarksPanel />
               </motion.div>
             )}
           </AnimatePresence>
