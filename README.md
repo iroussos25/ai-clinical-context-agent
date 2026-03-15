@@ -52,6 +52,8 @@ Scenario-based evaluation measuring quantitative metrics across clinical test ca
 - **Retrieval Engine:** Supabase **pgvector** with ANN (Approximate Nearest Neighbor) search and a local cosine-similarity fallback path.
 - **AI Layer:** Custom fallback logic in `google-text.ts` managing the Gemini/Gemma ecosystem.
 
+## Engineering Note: This platform was architected using a high-velocity AI-orchestration workflow, leveraging Claude 3.5 Opus to accelerate boilerplate and state logic development, allowing for a 6-hour pivot from concept to deployment.
+
 ## 🛠️ Local Setup
 
 1. **Install dependencies**
