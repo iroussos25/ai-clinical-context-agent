@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { AegisLogo } from "@/components/AegisLogo";
 
 import { NetworkStatusBanner } from "@/components/NetworkStatusBanner";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { AppSidebar } from "@/features/clinical/components/AppSidebar";
 import { ClinicalReviewPanel } from "@/features/clinical/components/ClinicalReviewPanel";
 import { ClinicalWorkbenchPanel } from "@/features/clinical/components/ClinicalWorkbenchPanel";
@@ -87,21 +89,19 @@ export default function Home() {
                   </svg>
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-                    Clinical Document Analyst
-                  </h1>
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                    AI-powered clinical data integrity review
-                  </p>
+                  <AegisLogo />
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleClearAll}
-                className="rounded-lg border border-zinc-300 px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-              >
-                Clear All
-              </button>
+              <div className="flex items-center gap-2">
+                <ThemeToggle />
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  Clear All
+                </button>
+              </div>
             </div>
           </motion.header>
 
