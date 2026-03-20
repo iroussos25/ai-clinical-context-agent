@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/iroussos25/ai-clinical-context-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/iroussos25/ai-clinical-context-agent/actions/workflows/ci.yml)
 [![Quality](https://img.shields.io/badge/Quality-Lint%20%2B%20Tests-green)](https://github.com/iroussos25/ai-clinical-context-agent/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/License-MIT-lightgrey)](https://github.com/iroussos25/ai-clinical-context-agent/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/License-Proprietary-red)](https://github.com/iroussos25/ai-clinical-context-agent/blob/main/LICENSE)
 
 **Engineer-Led. Nurse-Informed.**
 A production-grade clinical AI platform built with Next.js + TypeScript. This project demonstrates how to bridge the gap between "Generative AI" and "Clinical Reliability" through resilient architecture, grounded reasoning, and observable performance.
