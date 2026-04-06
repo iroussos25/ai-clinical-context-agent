@@ -60,7 +60,7 @@ function applyTheme(theme: Theme) {
 }
 
 export function ThemeToggle() {
-  const theme = useSyncExternalStore(subscribe, getThemeSnapshot, () => "light");
+  const theme = useSyncExternalStore<Theme>(subscribe, getThemeSnapshot, () => "light");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
